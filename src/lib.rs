@@ -15,7 +15,7 @@ pub mod utils;
 mod tcp_tests {
     use std;
     use client::tcp::WidowClient;
-    use server::init_widow_server;
+    use server::tcp::init_widow_server;
 
     fn setup(port: u16) -> WidowClient {
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
@@ -77,7 +77,7 @@ mod udp_tests {
     use std;
     use std::sync::mpsc::{SyncSender, Receiver};
     use client::udp::WidowClient;
-    use server::WidowSocket;
+    use server::udp::WidowSocket;
 
     fn setup(client_port: u16, server_port: u16) -> WidowClient {
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
