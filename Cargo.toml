@@ -9,3 +9,8 @@ keywords = ["games", "RPC", "networking"]
 license = "BSD-3-Clause"
 
 [dependencies]
+bincode = "1.0"
+env_logger = "0.5"
+log = "0.4"
+serde = "1.0"
+serde_derive = "1.0"
