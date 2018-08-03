@@ -1,6 +1,7 @@
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
+use std::net::UdpSocket;
 use std::io::{Read, Write};
 use std::io;
 use std::sync::mpsc::{channel};
@@ -176,5 +177,49 @@ impl WidowStream {
         let fncall: FnCall = deserialize(&buf[..n]).unwrap();
 
         Ok(fncall)
+    }
+}
+
+pub struct WidowSocket {
+    socket: UdpSocket,
+    state: State,
+}
+
+impl WidowSocket {
+    pub fn new(server_ip: Ipv4Addr, server_port: u16) -> WidowSocket {
+        let server_addr = SocketAddrV4::new(server_ip, server_port);
+        info!("Connecting to {:?}", server_addr);
+        let socket = UdpSocket::bind(server_addr).unwrap();
+
+        WidowSocket {
+            socket,
+            state: State::new(),
+        }
+    }
+    
+    pub fn start(&mut self) {
+        loop {
+            let (fncall, src) = self.rcv().unwrap();
+            let fnres = self.state.dispatch(fncall);
+            self.snd(fnres, src).unwrap();
+        }
+    }
+
+    fn snd(&mut self, fnres: FnRes, client_addr: SocketAddr) -> Result<(), io::Error>{
+        info!("Sending fnres");
+        let encoded: Vec<u8> = serialize(&fnres).unwrap();
+        try!(self.socket.send_to(&encoded, client_addr));
+        info!("Sent fncall");
+        Ok(())
+    }
+
+    fn rcv(&mut self) -> Result<(FnCall, SocketAddr), io::Error> {
+        let mut buf = [0u8; MSG_BUF_SIZE];
+
+        let (amt, src) = try!(self.socket.recv_from(&mut buf));
+        let fncall: FnCall = deserialize(&buf[..amt]).unwrap();
+        info!("Received fncall from {:?}", src);
+
+        Ok((fncall, src))
     }
 }
