@@ -1,0 +1,8 @@
+[package]
+name = "widow"
+version = "0.1.0"
+authors = ["Robert Rusch <rusch@mit.edu>"]
+description = "A WIP RPC library for games"
+license-file = "BSD"
+
+[dependencies]
