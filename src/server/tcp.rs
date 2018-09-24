@@ -1,12 +1,12 @@
+use std::io;
+use std::io::{Read, Write};
+use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
+use std::sync::mpsc::channel;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
-use std::net::{Ipv4Addr, SocketAddrV4};
-use std::io::{Read, Write};
-use std::io;
-use std::sync::mpsc::{channel};
 use std::thread;
 
-use bincode::{serialize, deserialize};
+use bincode::{deserialize, serialize};
 
 use consts::*;
 use utils::*;
@@ -25,25 +25,24 @@ pub fn init_widow_server(server_ip: Ipv4Addr, port: u16) {
 
     let mut listener = WidowListener::new(server_ip, port, new_stream_outbox);
     let mut server = WidowServer::new(new_stream_inbox);
-    thread::spawn(move|| listener.start());
-    thread::spawn(move|| server.start());
+    thread::spawn(move || listener.start());
+    thread::spawn(move || server.start());
 }
 
-pub struct WidowServer {
-    new_stream_inbox: NewStreamInCh,
-    streams: Vec<NewStreamCh>,
-    state: State,
+pub struct WidowListener {
+    tcp_listener: TcpListener,
+    outbox: NewStreamOutCh,
 }
 
-impl WidowServer {
+impl WidowListener {
     pub fn new(server_ip: Ipv4Addr, port: u16, outbox: NewStreamOutCh) -> WidowListener {
-        let tcp_addr = SocketAddrV4::new(server_ip, port);
-        let tcp_listener = TcpListener::bind(tcp_addr).unwrap();
+        let tcp_conn = SocketAddrV4::new(server_ip, port);
+        let tcp_listener = TcpListener::bind(tcp_conn).unwrap();
         info!("Listening on {:?}", tcp_listener);
 
         WidowListener {
             tcp_listener,
-            state: State::new(),
+            outbox,
         }
     }
 
@@ -53,27 +52,34 @@ impl WidowServer {
             if let Ok(stream) = _stream {
                 info!("New client at {:?}", stream);
                 stream.set_nodelay(true).unwrap();
-                
+
                 let (stream_outbox, server_inbox) = channel();
                 let (server_outbox, stream_inbox) = channel();
                 let mut widow_stream = WidowStream::new(stream, stream_inbox, stream_outbox);
-                thread::spawn(move|| widow_stream.start());
+                thread::spawn(move || widow_stream.start());
                 self.outbox.send((server_outbox, server_inbox)).unwrap();
             }
         }
     }
+}
+
+pub struct WidowServer {
+    new_stream_inbox: NewStreamInCh,
+    streams: Vec<NewStreamCh>,
+    state: State,
+}
+
+impl WidowServer {
+    pub fn new(new_stream_inbox: NewStreamInCh) -> WidowServer {
+        WidowServer {
+            new_stream_inbox,
+            streams: Vec::new(),
+            state: State::new(),
+        }
+    }
 
     pub fn start(&mut self) {
-        let server_token: Token = Token(0);
-
-        let poll = Poll::new().unwrap();
-        poll.register(&self.tcp_listener, server_token, Ready::readable(),
-                      PollOpt::edge()).unwrap();
-
-        let mut events = Events::with_capacity(1024);
-
         loop {
-            poll.poll(&mut events, None).unwrap();
             // Look for new streams
             if let Ok(new_stream) = self.new_stream_inbox.try_recv() {
                 self.streams.push(new_stream);
@@ -108,14 +114,14 @@ impl WidowStream {
     pub fn start(&mut self) {
         loop {
             match self.rcv() {
-               Ok(fncall) => {
+                Ok(fncall) => {
                     self.outbox.send(fncall).unwrap();
                     let fnres = self.inbox.recv().unwrap();
                     self.snd(fnres);
-               }
-               Err(e) => {
+                }
+                Err(e) => {
                     warn!("Killing stream because {}", e);
-               }
+                }
             }
         }
     }
@@ -151,15 +157,13 @@ pub struct State {
 
 impl State {
     pub fn new() -> State {
-        State {
-            n: 0, 
-        }
+        State { n: 0 }
     }
-    
+
     pub fn dispatch(&mut self, fncall: FnCall) -> FnRes {
         match fncall {
-           FnCall::Add(x) => FnRes::Add(self.add(x)),
-           FnCall::Echo(x) => FnRes::Echo(self.echo(x)),
+            FnCall::Add(x) => FnRes::Add(self.add(x)),
+            FnCall::Echo(x) => FnRes::Echo(self.echo(x)),
         }
     }
 

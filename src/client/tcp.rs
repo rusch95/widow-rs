@@ -1,8 +1,8 @@
-use std::net::{Ipv4Addr, SocketAddrV4, TcpStream, Shutdown};
-use std::io::{Read, Write};
 use std::io;
+use std::io::{Read, Write};
+use std::net::{Ipv4Addr, Shutdown, SocketAddrV4, TcpStream};
 
-use bincode::{serialize, deserialize};
+use bincode::{deserialize, serialize};
 
 use consts::*;
 use utils::*;
@@ -19,9 +19,7 @@ impl WidowClient {
         let stream = TcpStream::connect(addr).unwrap();
         stream.set_nodelay(true).unwrap();
 
-        WidowClient {
-            stream,
-        }
+        WidowClient { stream }
     }
 
     pub fn close(&mut self) {
@@ -30,17 +28,17 @@ impl WidowClient {
 
     pub fn add(&mut self, x: i32) -> Result<i32, io::Error> {
         match self.call(FnCall::Add(x)) {
-            Ok(FnRes::Add(n)) => Ok(n), 
+            Ok(FnRes::Add(n)) => Ok(n),
             Err(e) => Err(e),
-            _ => panic!("Got some other result")
+            _ => panic!("Got some other result"),
         }
     }
 
     pub fn echo(&mut self, x: i32) -> Result<i32, io::Error> {
         match self.call(FnCall::Echo(x)) {
-            Ok(FnRes::Echo(n)) => Ok(n), 
+            Ok(FnRes::Echo(n)) => Ok(n),
             Err(e) => Err(e),
-            _ => panic!("Got some other result")
+            _ => panic!("Got some other result"),
         }
     }
 

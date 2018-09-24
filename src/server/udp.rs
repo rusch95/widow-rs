@@ -1,8 +1,8 @@
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
-use std::net::UdpSocket;
 use std::io;
+use std::net::UdpSocket;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
-use bincode::{serialize, deserialize};
+use bincode::{deserialize, serialize};
 
 use consts::*;
 
@@ -12,15 +12,13 @@ pub struct State {
 
 impl State {
     pub fn new() -> State {
-        State {
-            n: 0, 
-        }
+        State { n: 0 }
     }
-    
+
     pub fn dispatch(&mut self, fncall: FnCall) -> FnRes {
         match fncall {
-           FnCall::Add(x) => FnRes::Add(self.add(x)),
-           FnCall::Echo(x) => FnRes::Echo(self.echo(x)),
+            FnCall::Add(x) => FnRes::Add(self.add(x)),
+            FnCall::Echo(x) => FnRes::Echo(self.echo(x)),
         }
     }
 
@@ -50,7 +48,7 @@ impl WidowSocket {
             state: State::new(),
         }
     }
-    
+
     pub fn start(&mut self) {
         loop {
             let (fncall, src) = self.rcv().unwrap();
@@ -59,7 +57,7 @@ impl WidowSocket {
         }
     }
 
-    fn snd(&mut self, fnres: FnRes, client_addr: SocketAddr) -> Result<(), io::Error>{
+    fn snd(&mut self, fnres: FnRes, client_addr: SocketAddr) -> Result<(), io::Error> {
         info!("Sending fnres");
         let encoded: Vec<u8> = serialize(&fnres).unwrap();
         try!(self.socket.send_to(&encoded, client_addr));

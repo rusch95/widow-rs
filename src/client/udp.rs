@@ -1,8 +1,8 @@
+use std::io;
 use std::net::UdpSocket;
 use std::net::{Ipv4Addr, SocketAddrV4};
-use std::io;
 
-use bincode::{serialize, deserialize};
+use bincode::{deserialize, serialize};
 
 use consts::*;
 
@@ -12,8 +12,12 @@ pub struct WidowClient {
 }
 
 impl WidowClient {
-    pub fn bind(client_ip: Ipv4Addr, client_port: u16, 
-                server_ip: Ipv4Addr, server_port: u16) -> WidowClient {
+    pub fn bind(
+        client_ip: Ipv4Addr,
+        client_port: u16,
+        server_ip: Ipv4Addr,
+        server_port: u16,
+    ) -> WidowClient {
         let client_addr = SocketAddrV4::new(client_ip, client_port);
         let server_addr = SocketAddrV4::new(server_ip, server_port);
 
@@ -29,17 +33,17 @@ impl WidowClient {
 
     pub fn add(&mut self, x: i32) -> Result<i32, io::Error> {
         match self.call(FnCall::Add(x)) {
-            Ok(FnRes::Add(n)) => Ok(n), 
+            Ok(FnRes::Add(n)) => Ok(n),
             Err(e) => Err(e),
-            _ => panic!("Got some other result")
+            _ => panic!("Got some other result"),
         }
     }
 
     pub fn echo(&mut self, x: i32) -> Result<i32, io::Error> {
         match self.call(FnCall::Echo(x)) {
-            Ok(FnRes::Echo(n)) => Ok(n), 
+            Ok(FnRes::Echo(n)) => Ok(n),
             Err(e) => Err(e),
-            _ => panic!("Got some other result")
+            _ => panic!("Got some other result"),
         }
     }
 
@@ -49,7 +53,7 @@ impl WidowClient {
         self.rcv()
     }
 
-    fn snd(&mut self, fncall: FnCall) -> Result<(), io::Error>{
+    fn snd(&mut self, fncall: FnCall) -> Result<(), io::Error> {
         info!("Sending fncall");
         let encoded: Vec<u8> = serialize(&fncall).unwrap();
         try!(self.socket.send_to(&encoded, self.server_addr));

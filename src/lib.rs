@@ -7,15 +7,15 @@ extern crate serde;
 extern crate serde_derive;
 
 pub mod client;
-pub mod server;
 pub mod consts;
+pub mod server;
 pub mod utils;
 
 #[cfg(test)]
 mod tcp_tests {
-    use std;
     use client::tcp::WidowClient;
     use server::tcp::init_widow_server;
+    use std;
 
     fn setup(port: u16) -> WidowClient {
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
@@ -57,7 +57,7 @@ mod tcp_tests {
         let (send, recv) = std::sync::mpsc::sync_channel(8);
         for _ in 0..8 {
             let send_clone = send.clone();
-            std::thread::spawn(move||{
+            std::thread::spawn(move || {
                 let mut widow_client = WidowClient::connect(localhost, port);
                 for i in 1..32 {
                     assert_eq!(widow_client.echo(i).unwrap(), i);
@@ -74,19 +74,18 @@ mod tcp_tests {
 
 #[cfg(test)]
 mod udp_tests {
-    use std;
-    use std::sync::mpsc::{SyncSender, Receiver};
     use client::udp::WidowClient;
     use server::udp::WidowSocket;
+    use std;
+    use std::sync::mpsc::{Receiver, SyncSender};
 
     fn setup(client_port: u16, server_port: u16) -> WidowClient {
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
         assert_eq!(localhost.is_loopback(), true);
 
         let mut widow_server = WidowSocket::new(localhost, server_port);
-        std::thread::spawn(move|| widow_server.start());
-        WidowClient::bind(localhost, client_port, 
-                          localhost, server_port)
+        std::thread::spawn(move || widow_server.start());
+        WidowClient::bind(localhost, client_port, localhost, server_port)
     }
 
     #[test]
@@ -114,17 +113,17 @@ mod udp_tests {
         let server_port = 6000;
 
         let mut widow_server = WidowSocket::new(localhost, server_port);
-        std::thread::spawn(move|| widow_server.start());
+        std::thread::spawn(move || widow_server.start());
         let num_threads = 32;
         let num_pings_per_thread = 512;
-        let (send, recv): (SyncSender<i32>, Receiver<i32>) 
-            = std::sync::mpsc::sync_channel(num_threads);
+        let (send, recv): (SyncSender<i32>, Receiver<i32>) =
+            std::sync::mpsc::sync_channel(num_threads);
         for i in 0..num_threads {
             let client_port = server_port + (i as u16) + 1;
-            let mut widow_client = WidowClient::bind(localhost, client_port, 
-                                                     localhost, server_port);
+            let mut widow_client =
+                WidowClient::bind(localhost, client_port, localhost, server_port);
             let mut send_clone = send.clone();
-            std::thread::spawn(move||{
+            std::thread::spawn(move || {
                 for _ in 0..num_pings_per_thread {
                     send_clone.send(widow_client.add(1).unwrap()).unwrap();
                 }
