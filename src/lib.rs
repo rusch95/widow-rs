@@ -28,7 +28,7 @@ mod tcp_tests {
 
     #[test]
     fn simple_adding() {
-        let mut widow_client = setup(1000);
+        let mut widow_client = setup(3000);
 
         for i in 1..32 {
             assert_eq!(widow_client.add(1).unwrap(), i);
@@ -39,7 +39,7 @@ mod tcp_tests {
 
     #[test]
     fn simple_echo() {
-        let mut widow_client = setup(2000);
+        let mut widow_client = setup(3100);
 
         for i in 1..32 {
             assert_eq!(widow_client.echo(i).unwrap(), i);
@@ -51,7 +51,7 @@ mod tcp_tests {
     #[test]
     fn multi_echo() {
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
-        let port = 3000;
+        let port = 3200;
         init_widow_server(localhost, port);
 
         let (send, recv) = std::sync::mpsc::sync_channel(8);
@@ -90,7 +90,7 @@ mod udp_tests {
 
     #[test]
     fn simple_udp_adding() {
-        let mut widow_client = setup(4000, 4001);
+        let mut widow_client = setup(3300, 3301);
 
         for i in 1..32 {
             assert_eq!(widow_client.add(1).unwrap(), i);
@@ -99,7 +99,7 @@ mod udp_tests {
 
     #[test]
     fn simple_udp_echo() {
-        let mut widow_client = setup(5000, 5001);
+        let mut widow_client = setup(3400, 3401);
 
         for i in 1..32 {
             assert_eq!(widow_client.echo(i).unwrap(), i)
@@ -110,7 +110,7 @@ mod udp_tests {
     fn aggresive_udp_add() {
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
         assert_eq!(localhost.is_loopback(), true);
-        let server_port = 6000;
+        let server_port = 3500;
 
         let mut widow_server = WidowSocket::new(localhost, server_port);
         std::thread::spawn(move || widow_server.start());
