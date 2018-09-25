@@ -7,6 +7,8 @@ use std::sync::mpsc::Sender;
 use std::thread;
 
 use bincode::{deserialize, serialize};
+use tokio::net::{TcpStream, TcpListener};
+use tokio::prelude::*;
 
 use consts::*;
 use utils::*;
@@ -23,62 +25,30 @@ pub type NewStreamInCh = Receiver<NewStreamCh>;
 pub fn init_widow_server(server_ip: Ipv4Addr, port: u16) {
     let (new_stream_outbox, new_stream_inbox) = channel();
 
-    let mut listener = WidowListener::new(server_ip, port, new_stream_outbox);
-    let mut server = WidowServer::new(new_stream_inbox);
-    thread::spawn(move || listener.start());
-    thread::spawn(move || server.start());
+    thread::spawn(move || init_widow_listener(server_ip, port, new_stream_outbox);
+    thread::spawn(move || server.start(new_stream_inbox));
 }
 
-pub struct WidowListener {
-    tcp_listener: TcpListener,
-    outbox: NewStreamOutCh,
-}
+/* Start up a tokio::TcpListener. Does not return */
+pub fn init_widow_listener(server_ip: Ipv4Addr, port: u16, outbox: NewStreamOutCh) {
+    let tcp_conn = SocketAddrV4::new(server_ip, port);
+    let listener = TcpListener::bind(tcp_conn).unwrap();
+    info!("Listening on {:?}", tcp_conn);
 
-impl WidowListener {
-    pub fn new(server_ip: Ipv4Addr, port: u16, outbox: NewStreamOutCh) -> WidowListener {
-        let tcp_conn = SocketAddrV4::new(server_ip, port);
-        let tcp_listener = TcpListener::bind(tcp_conn).unwrap();
-        info!("Listening on {:?}", tcp_listener);
-
-        WidowListener {
-            tcp_listener,
-            outbox,
-        }
-    }
-
-    pub fn start(&mut self) {
-        info!("Listenining on {:?}", self.tcp_listener);
-        for _stream in self.tcp_listener.incoming() {
-            if let Ok(stream) = _stream {
-                info!("New client at {:?}", stream);
-                stream.set_nodelay(true).unwrap();
-
-                let (stream_outbox, server_inbox) = channel();
-                let (server_outbox, stream_inbox) = channel();
-                let mut widow_stream = WidowStream::new(stream, stream_inbox, stream_outbox);
-                thread::spawn(move || widow_stream.start());
-                self.outbox.send((server_outbox, server_inbox)).unwrap();
+    tokio::run({
+        listener.incoming()
+            .map_err(|e| error!("Failed to accept socket; error = {:?}", e))
+            .for_each(|socket| {
+                WidowStream(socket).start();
+                Ok(())
             }
-        }
-    }
+    });
 }
 
-pub struct WidowServer {
-    new_stream_inbox: NewStreamInCh,
-    streams: Vec<NewStreamCh>,
-    state: State,
-}
+init_widow_server(new_stream_inbox: NewStreamInCh) -> WidowServer {
+        let streams = Vec::new(),
+        let state = State::new(),
 
-impl WidowServer {
-    pub fn new(new_stream_inbox: NewStreamInCh) -> WidowServer {
-        WidowServer {
-            new_stream_inbox,
-            streams: Vec::new(),
-            state: State::new(),
-        }
-    }
-
-    pub fn start(&mut self) {
         loop {
             // Look for new streams
             if let Ok(new_stream) = self.new_stream_inbox.try_recv() {
@@ -103,7 +73,7 @@ pub struct WidowStream {
 }
 
 impl WidowStream {
-    pub fn new(stream: TcpStream, inbox: StreamInCh, outbox: StreamOutCh) -> WidowStream {
+    pub fn new(socket: TcpStream, inbox: StreamInCh, outbox: StreamOutCh) -> WidowStream {
         WidowStream {
             stream,
             inbox,
