@@ -1,6 +1,6 @@
 use std::io;
 use std::net::UdpSocket;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{IpAddr, SocketAddr};
 
 use bincode::{deserialize, serialize};
 
@@ -38,8 +38,8 @@ pub struct WidowSocket {
 }
 
 impl WidowSocket {
-    pub fn new(server_ip: Ipv4Addr, server_port: u16) -> WidowSocket {
-        let server_addr = SocketAddrV4::new(server_ip, server_port);
+    pub fn new(server_ip: IpAddr, server_port: u16) -> WidowSocket {
+        let server_addr = SocketAddr::new(server_ip, server_port);
         info!("Connecting to {:?}", server_addr);
         let socket = UdpSocket::bind(server_addr).unwrap();
 

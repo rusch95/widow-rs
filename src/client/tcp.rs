@@ -1,6 +1,6 @@
 use std::io;
 use std::io::{Read, Write};
-use std::net::{Ipv4Addr, Shutdown, SocketAddrV4, TcpStream};
+use std::net::{IpAddr, Shutdown, SocketAddr, TcpStream};
 
 use bincode::{deserialize, serialize};
 
@@ -12,8 +12,8 @@ pub struct WidowClient {
 }
 
 impl WidowClient {
-    pub fn connect(server_ip: Ipv4Addr, port: u16) -> WidowClient {
-        let addr = SocketAddrV4::new(server_ip, port);
+    pub fn connect(server_ip: IpAddr, port: u16) -> WidowClient {
+        let addr = SocketAddr::new(server_ip, port);
 
         info!("Connecting to {:?}", addr);
         let stream = TcpStream::connect(addr).unwrap();

@@ -1,6 +1,6 @@
 use std::io;
 use std::net::UdpSocket;
-use std::net::{Ipv4Addr, SocketAddrV4};
+use std::net::{IpAddr, SocketAddr};
 
 use bincode::{deserialize, serialize};
 
@@ -8,18 +8,18 @@ use consts::*;
 
 pub struct WidowClient {
     socket: UdpSocket,
-    server_addr: SocketAddrV4,
+    server_addr: SocketAddr,
 }
 
 impl WidowClient {
     pub fn bind(
-        client_ip: Ipv4Addr,
+        client_ip: IpAddr,
         client_port: u16,
-        server_ip: Ipv4Addr,
+        server_ip: IpAddr,
         server_port: u16,
     ) -> WidowClient {
-        let client_addr = SocketAddrV4::new(client_ip, client_port);
-        let server_addr = SocketAddrV4::new(server_ip, server_port);
+        let client_addr = SocketAddr::new(client_ip, client_port);
+        let server_addr = SocketAddr::new(server_ip, server_port);
 
         info!("Binding to {:?}", client_addr);
         info!("Connecting to {:?}", client_addr);
