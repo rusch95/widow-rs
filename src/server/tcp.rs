@@ -1,9 +1,7 @@
 use std::io;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Receiver;
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{SyncSender, Receiver, sync_channel};
 use std::thread;
 
 use bincode::{deserialize, serialize};
@@ -11,31 +9,28 @@ use bincode::{deserialize, serialize};
 use consts::*;
 use utils::*;
 
-pub type StreamOutCh = Sender<FnCall>;
+pub type StreamOutCh = SyncSender<(HandlerOutCh, FnCall)>;
+pub type HandlerInCh = Receiver<(HandlerOutCh, FnCall)>;
+pub type HandlerOutCh = SyncSender<FnRes>;
 pub type StreamInCh = Receiver<FnRes>;
-pub type ServerOutCh = Sender<FnRes>;
-pub type ServerInCh = Receiver<FnCall>;
-pub type NewStreamCh = (ServerOutCh, ServerInCh);
-pub type NewStreamOutCh = Sender<NewStreamCh>;
-pub type NewStreamInCh = Receiver<NewStreamCh>;
 
 // Spawns threads and such
 pub fn init_widow_server(server_ip: Ipv4Addr, port: u16) {
-    let (new_stream_outbox, new_stream_inbox) = channel();
+    let (stream_outbox, handler_inbox) = sync_channel(1);
 
-    let mut listener = WidowListener::new(server_ip, port, new_stream_outbox);
-    let mut server = WidowServer::new(new_stream_inbox);
+    let mut listener = WidowListener::new(server_ip, port, stream_outbox);
+    let mut handler = WidowHandler::new(handler_inbox);
     thread::spawn(move || listener.start());
-    thread::spawn(move || server.start());
+    thread::spawn(move || handler.start());
 }
 
 pub struct WidowListener {
     tcp_listener: TcpListener,
-    outbox: NewStreamOutCh,
+    outbox: StreamOutCh,
 }
 
 impl WidowListener {
-    pub fn new(server_ip: Ipv4Addr, port: u16, outbox: NewStreamOutCh) -> WidowListener {
+    pub fn new(server_ip: Ipv4Addr, port: u16, outbox: StreamOutCh) -> WidowListener {
         let tcp_conn = SocketAddrV4::new(server_ip, port);
         let tcp_listener = TcpListener::bind(tcp_conn).unwrap();
         info!("Listening on {:?}", tcp_listener);
@@ -52,45 +47,31 @@ impl WidowListener {
             if let Ok(stream) = _stream {
                 info!("New client at {:?}", stream);
                 stream.set_nodelay(true).unwrap();
-
-                let (stream_outbox, server_inbox) = channel();
-                let (server_outbox, stream_inbox) = channel();
-                let mut widow_stream = WidowStream::new(stream, stream_inbox, stream_outbox);
+                let mut widow_stream = WidowStream::new(stream, self.outbox.clone());
                 thread::spawn(move || widow_stream.start());
-                self.outbox.send((server_outbox, server_inbox)).unwrap();
             }
         }
     }
 }
 
-pub struct WidowServer {
-    new_stream_inbox: NewStreamInCh,
-    streams: Vec<NewStreamCh>,
+pub struct WidowHandler {
+    inbox: HandlerInCh,
     state: State,
 }
 
-impl WidowServer {
-    pub fn new(new_stream_inbox: NewStreamInCh) -> WidowServer {
-        WidowServer {
-            new_stream_inbox,
-            streams: Vec::new(),
+impl WidowHandler {
+    pub fn new(inbox: HandlerInCh) -> WidowHandler {
+        WidowHandler {
+            inbox, 
             state: State::new(),
         }
     }
 
     pub fn start(&mut self) {
         loop {
-            // Look for new streams
-            if let Ok(new_stream) = self.new_stream_inbox.try_recv() {
-                self.streams.push(new_stream);
-            }
-
-            // Service messages from streams
-            for (outbox, inbox) in &mut self.streams {
-                if let Ok(fncall) = inbox.try_recv() {
-                    let res = self.state.dispatch(fncall);
-                    outbox.send(res).unwrap();
-                }
+            for (outbox, fncall) in &mut self.inbox.recv() {
+                let res = self.state.dispatch(*fncall);
+                outbox.send(res).unwrap();
             }
         }
     }
@@ -98,16 +79,19 @@ impl WidowServer {
 
 pub struct WidowStream {
     stream: TcpStream,
-    inbox: StreamInCh,
-    outbox: StreamOutCh,
+    stream_inbox: StreamInCh,
+    stream_outbox: StreamOutCh,
+    handler_outbox: HandlerOutCh,
 }
 
 impl WidowStream {
-    pub fn new(stream: TcpStream, inbox: StreamInCh, outbox: StreamOutCh) -> WidowStream {
+    pub fn new(stream: TcpStream, stream_outbox: StreamOutCh) -> WidowStream {
+        let (handler_outbox, stream_inbox) = sync_channel(1);
         WidowStream {
             stream,
-            inbox,
-            outbox,
+            stream_inbox,
+            stream_outbox,
+            handler_outbox,
         }
     }
 
@@ -115,8 +99,8 @@ impl WidowStream {
         loop {
             match self.rcv() {
                 Ok(fncall) => {
-                    self.outbox.send(fncall).unwrap();
-                    let fnres = self.inbox.recv().unwrap();
+                    self.stream_outbox.send((self.handler_outbox.clone(), fncall)).unwrap();
+                    let fnres = self.stream_inbox.recv().unwrap();
                     self.snd(fnres);
                 }
                 Err(e) => {
