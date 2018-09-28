@@ -89,9 +89,13 @@ mod udp_tests {
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
         assert_eq!(localhost.is_loopback(), true);
 
-        let mut widow_server = WidowSocket::new(localhost, server_port);
-        std::thread::spawn(move || widow_server.start());
-        WidowClient::bind(localhost, client_port, localhost, server_port)
+        let mut widow_server = WidowSocket::new(localhost, server_port).unwrap();
+        std::thread::spawn(move || {
+            if let Err(e) = widow_server.start() {
+                error!("Killing server: {:?}", e);
+            }
+        });
+        WidowClient::bind(localhost, client_port, localhost, server_port).unwrap()
     }
 
     #[test]
@@ -120,8 +124,12 @@ mod udp_tests {
         assert_eq!(localhost.is_loopback(), true);
         let server_port = 3500;
 
-        let mut widow_server = WidowSocket::new(localhost, server_port);
-        std::thread::spawn(move || widow_server.start());
+        let mut widow_server = WidowSocket::new(localhost, server_port).unwrap();
+        std::thread::spawn(move || {
+            if let Err(e) = widow_server.start() {
+                error!("Killing server: {:?}", e);
+            }
+        });
         let num_threads = 32;
         let num_pings_per_thread = 512;
         let (send, recv): (SyncSender<i32>, Receiver<i32>) =
@@ -129,11 +137,13 @@ mod udp_tests {
         for i in 0..num_threads {
             let client_port = server_port + (i as u16) + 1;
             let mut widow_client =
-                WidowClient::bind(localhost, client_port, localhost, server_port);
+                WidowClient::bind(localhost, client_port, localhost, server_port).unwrap();
             let mut send_clone = send.clone();
             std::thread::spawn(move || {
                 for _ in 0..num_pings_per_thread {
-                    send_clone.send(widow_client.add(1).unwrap()).unwrap();
+                    // Ignore send errors, as we are not looking
+                    // for success in every thread, only most
+                    let _ = send_clone.send(widow_client.add(1).unwrap());
                 }
             });
         }

@@ -1,4 +1,3 @@
-use std::io;
 use std::net::UdpSocket;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 
@@ -38,39 +37,39 @@ pub struct WidowSocket {
 }
 
 impl WidowSocket {
-    pub fn new(server_ip: Ipv4Addr, server_port: u16) -> WidowSocket {
+    pub fn new(server_ip: Ipv4Addr, server_port: u16) -> ResultB<WidowSocket> {
         let server_addr = SocketAddrV4::new(server_ip, server_port);
         info!("Connecting to {:?}", server_addr);
-        let socket = UdpSocket::bind(server_addr).unwrap();
+        let socket = UdpSocket::bind(server_addr)?;
 
-        WidowSocket {
+        Ok(WidowSocket {
             socket,
             state: State::new(),
-        }
+        })
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> ResultB<()> {
         loop {
-            let (fncall, src) = self.rcv().unwrap();
+            let (fncall, src) = self.rcv()?;
             let fnres = self.state.dispatch(fncall);
-            self.snd(fnres, src).unwrap();
+            self.snd(fnres, src)?;
         }
     }
 
-    fn snd(&mut self, fnres: FnRes, client_addr: SocketAddr) -> Result<(), io::Error> {
-        info!("Sending fnres");
-        let encoded: Vec<u8> = serialize(&fnres).unwrap();
-        try!(self.socket.send_to(&encoded, client_addr));
-        info!("Sent fncall");
+    fn snd(&mut self, fnres: FnRes, client_addr: SocketAddr) -> ResultB<()> {
+        debug!("Sending fnres");
+        let encoded: Vec<u8> = serialize(&fnres)?;
+        self.socket.send_to(&encoded, client_addr)?;
+        debug!("Sent fncall");
         Ok(())
     }
 
-    fn rcv(&mut self) -> Result<(FnCall, SocketAddr), io::Error> {
+    fn rcv(&mut self) -> ResultB<(FnCall, SocketAddr)> {
         let mut buf = [0u8; MSG_BUF_SIZE];
 
-        let (amt, src) = try!(self.socket.recv_from(&mut buf));
-        let fncall: FnCall = deserialize(&buf[..amt]).unwrap();
-        info!("Received fncall from {:?}", src);
+        let (amt, src) = self.socket.recv_from(&mut buf)?;
+        let fncall: FnCall = deserialize(&buf[..amt])?;
+        debug!("Received fncall from {:?}", src);
 
         Ok((fncall, src))
     }

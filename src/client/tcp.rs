@@ -48,7 +48,7 @@ impl WidowClient {
         self.rcv()
     }
 
-    fn snd(&mut self, fncall: FnCall) -> ResultB<()> {  
+    fn snd(&mut self, fncall: FnCall) -> ResultB<()> {
         debug!("Sending {:?}", fncall);
         let mut buf = [0u8; MSG_BUF_SIZE];
         let encoded: Vec<u8> = serialize(&fncall)?;

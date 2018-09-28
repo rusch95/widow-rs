@@ -49,10 +49,10 @@ impl WidowListener {
                 let peer_addr = stream.peer_addr().unwrap();
                 let mut widow_stream = WidowStream::new(stream, self.outbox.clone());
                 thread::spawn(move || {
-                    // Stream returns on error with the error, 
-                    // otherwise it should never return 
+                    // Stream returns on error with the error,
+                    // otherwise it should never return
                     if let Err(e) = widow_stream.start() {
-                        warn!("Killing stream from {}: {:?}", peer_addr, e); 
+                        warn!("Killing stream from {}: {:?}", peer_addr, e);
                     }
                 });
             }
