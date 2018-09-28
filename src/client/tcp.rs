@@ -12,21 +12,21 @@ pub struct WidowClient {
 }
 
 impl WidowClient {
-    pub fn connect(server_ip: Ipv4Addr, port: u16) -> WidowClient {
+    pub fn connect(server_ip: Ipv4Addr, port: u16) -> Result<WidowClient, io::Error> {
         let addr = SocketAddrV4::new(server_ip, port);
 
         info!("Connecting to {:?}", addr);
-        let stream = TcpStream::connect(addr).unwrap();
-        stream.set_nodelay(true).unwrap();
+        let stream = TcpStream::connect(addr)?;
+        stream.set_nodelay(true)?;
 
-        WidowClient { stream }
+        Ok(WidowClient { stream })
     }
 
-    pub fn close(&mut self) {
-        self.stream.shutdown(Shutdown::Both).unwrap();
+    pub fn close(&mut self) -> Result<(), io::Error> {
+        self.stream.shutdown(Shutdown::Both)
     }
 
-    pub fn add(&mut self, x: i32) -> Result<i32, io::Error> {
+    pub fn add(&mut self, x: i32) -> ResultB<i32> {
         match self.call(FnCall::Add(x)) {
             Ok(FnRes::Add(n)) => Ok(n),
             Err(e) => Err(e),
@@ -34,7 +34,7 @@ impl WidowClient {
         }
     }
 
-    pub fn echo(&mut self, x: i32) -> Result<i32, io::Error> {
+    pub fn echo(&mut self, x: i32) -> ResultB<i32> {
         match self.call(FnCall::Echo(x)) {
             Ok(FnRes::Echo(n)) => Ok(n),
             Err(e) => Err(e),
@@ -43,35 +43,35 @@ impl WidowClient {
     }
 
     // Enums are easy. Will switch to something better later
-    fn call(&mut self, func: FnCall) -> Result<FnRes, io::Error> {
-        self.snd(func);
+    fn call(&mut self, func: FnCall) -> ResultB<FnRes> {
+        self.snd(func)?;
         self.rcv()
     }
 
-    fn snd(&mut self, fncall: FnCall) {
-        info!("Sending {:?}", fncall);
+    fn snd(&mut self, fncall: FnCall) -> ResultB<()> {  
+        debug!("Sending {:?}", fncall);
         let mut buf = [0u8; MSG_BUF_SIZE];
-        let encoded: Vec<u8> = serialize(&fncall).unwrap();
+        let encoded: Vec<u8> = serialize(&fncall)?;
         let enc_size_u8s = usize_to_u8_array(encoded.len());
         let buf_len = encoded.len() + 4;
 
         buf[..4].clone_from_slice(&enc_size_u8s);
         buf[4..buf_len].clone_from_slice(&encoded);
         let _amt = self.stream.write(&buf[..buf_len]);
-        info!("Sent {:?}", fncall);
+        debug!("Sent {:?}", fncall);
+        Ok(())
     }
 
-    fn rcv(&mut self) -> Result<FnRes, io::Error> {
+    fn rcv(&mut self) -> ResultB<FnRes> {
         let mut n_buf = [0u8; 4];
         let mut buf = [0u8; MSG_BUF_SIZE];
 
-        try!(self.stream.read_exact(&mut n_buf));
-        info!("Rcv");
+        self.stream.read_exact(&mut n_buf)?;
         let n = u8_array_to_usize(&n_buf[..], 0);
-        try!(self.stream.read_exact(&mut buf[..n]));
+        self.stream.read_exact(&mut buf[..n])?;
 
-        let fnres: FnRes = deserialize(&buf[..n]).unwrap();
-        info!("Rcvd {:?}", fnres);
+        let fnres: FnRes = deserialize(&buf[..n])?;
+        debug!("Received {:?}", fnres);
 
         Ok(fnres)
     }

@@ -1,7 +1,6 @@
-use std::io;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddrV4, TcpListener, TcpStream};
-use std::sync::mpsc::{SyncSender, Receiver, sync_channel};
+use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::thread;
 
 use bincode::{deserialize, serialize};
@@ -18,7 +17,7 @@ pub type StreamInCh = Receiver<FnRes>;
 pub fn init_widow_server(server_ip: Ipv4Addr, port: u16) {
     let (stream_outbox, handler_inbox) = sync_channel(1);
 
-    let mut listener = WidowListener::new(server_ip, port, stream_outbox);
+    let mut listener = WidowListener::new(server_ip, port, stream_outbox).unwrap();
     let mut handler = WidowHandler::new(handler_inbox);
     thread::spawn(move || listener.start());
     thread::spawn(move || handler.start());
@@ -30,15 +29,15 @@ pub struct WidowListener {
 }
 
 impl WidowListener {
-    pub fn new(server_ip: Ipv4Addr, port: u16, outbox: StreamOutCh) -> WidowListener {
+    pub fn new(server_ip: Ipv4Addr, port: u16, outbox: StreamOutCh) -> ResultB<WidowListener> {
         let tcp_conn = SocketAddrV4::new(server_ip, port);
-        let tcp_listener = TcpListener::bind(tcp_conn).unwrap();
+        let tcp_listener = TcpListener::bind(tcp_conn)?;
         info!("Listening on {:?}", tcp_listener);
 
-        WidowListener {
+        Ok(WidowListener {
             tcp_listener,
             outbox,
-        }
+        })
     }
 
     pub fn start(&mut self) {
@@ -47,8 +46,15 @@ impl WidowListener {
             if let Ok(stream) = _stream {
                 info!("New client at {:?}", stream);
                 stream.set_nodelay(true).unwrap();
+                let peer_addr = stream.peer_addr().unwrap();
                 let mut widow_stream = WidowStream::new(stream, self.outbox.clone());
-                thread::spawn(move || widow_stream.start());
+                thread::spawn(move || {
+                    // Stream returns on error with the error, 
+                    // otherwise it should never return 
+                    if let Err(e) = widow_stream.start() {
+                        warn!("Killing stream from {}: {:?}", peer_addr, e); 
+                    }
+                });
             }
         }
     }
@@ -62,7 +68,7 @@ pub struct WidowHandler {
 impl WidowHandler {
     pub fn new(inbox: HandlerInCh) -> WidowHandler {
         WidowHandler {
-            inbox, 
+            inbox,
             state: State::new(),
         }
     }
@@ -71,7 +77,9 @@ impl WidowHandler {
         loop {
             for (outbox, fncall) in &mut self.inbox.recv() {
                 let res = self.state.dispatch(*fncall);
-                outbox.send(res).unwrap();
+                if let Err(e) = outbox.send(res) {
+                    error!("Stream inbox not receiving: {:?}", e);
+                }
             }
         }
     }
@@ -95,41 +103,43 @@ impl WidowStream {
         }
     }
 
-    pub fn start(&mut self) {
+    pub fn start(&mut self) -> ResultB<()> {
         loop {
             match self.rcv() {
                 Ok(fncall) => {
-                    self.stream_outbox.send((self.handler_outbox.clone(), fncall)).unwrap();
-                    let fnres = self.stream_inbox.recv().unwrap();
-                    self.snd(fnres);
+                    self.stream_outbox
+                        .send((self.handler_outbox.clone(), fncall))?;
+                    let fnres = self.stream_inbox.recv()?;
+                    self.snd(fnres)?;
                 }
                 Err(e) => {
-                    warn!("Killing stream because {}", e);
+                    return Err(e);
                 }
             }
         }
     }
 
-    fn snd(&mut self, fnres: FnRes) {
+    fn snd(&mut self, fnres: FnRes) -> ResultB<()> {
         let mut buf = [0u8; MSG_BUF_SIZE];
-        let encoded: Vec<u8> = serialize(&fnres).unwrap();
+        let encoded: Vec<u8> = serialize(&fnres)?;
         let enc_size_u8s = usize_to_u8_array(encoded.len());
         let buf_len = encoded.len() + 4;
 
         buf[..4].clone_from_slice(&enc_size_u8s);
         buf[4..buf_len].clone_from_slice(&encoded);
         let _amt = self.stream.write(&buf[..buf_len]);
+        Ok(())
     }
 
-    fn rcv(&mut self) -> Result<FnCall, io::Error> {
+    fn rcv(&mut self) -> ResultB<FnCall> {
         let mut n_buf = [0u8; 4];
         let mut buf = [0u8; MSG_BUF_SIZE];
 
-        try!(self.stream.read_exact(&mut n_buf));
+        self.stream.read_exact(&mut n_buf)?;
         let n = u8_array_to_usize(&n_buf[..], 0);
-        try!(self.stream.read_exact(&mut buf[..n]));
+        self.stream.read_exact(&mut buf[..n])?;
 
-        let fncall: FnCall = deserialize(&buf[..n]).unwrap();
+        let fncall: FnCall = deserialize(&buf[..n])?;
 
         Ok(fncall)
     }

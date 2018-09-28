@@ -18,12 +18,14 @@ mod tcp_tests {
     use std;
 
     fn setup(port: u16) -> WidowClient {
+        let _ = ::env_logger::try_init();
+
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
         assert_eq!(localhost.is_loopback(), true);
 
         init_widow_server(localhost, port);
 
-        WidowClient::connect(localhost, port)
+        WidowClient::connect(localhost, port).unwrap()
     }
 
     #[test]
@@ -34,7 +36,7 @@ mod tcp_tests {
             assert_eq!(widow_client.add(1).unwrap(), i);
         }
 
-        widow_client.close();
+        widow_client.close().unwrap();
     }
 
     #[test]
@@ -45,11 +47,13 @@ mod tcp_tests {
             assert_eq!(widow_client.echo(i).unwrap(), i);
         }
 
-        widow_client.close();
+        widow_client.close().unwrap();
     }
 
     #[test]
     fn multi_echo() {
+        let _ = ::env_logger::try_init();
+
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
         let port = 3200;
         init_widow_server(localhost, port);
@@ -58,11 +62,11 @@ mod tcp_tests {
         for _ in 0..8 {
             let send_clone = send.clone();
             std::thread::spawn(move || {
-                let mut widow_client = WidowClient::connect(localhost, port);
+                let mut widow_client = WidowClient::connect(localhost, port).unwrap();
                 for i in 1..32 {
                     assert_eq!(widow_client.echo(i).unwrap(), i);
                 }
-                widow_client.close();
+                widow_client.close().unwrap();
                 send_clone.send(()).unwrap();
             });
         }
@@ -80,6 +84,8 @@ mod udp_tests {
     use std::sync::mpsc::{Receiver, SyncSender};
 
     fn setup(client_port: u16, server_port: u16) -> WidowClient {
+        let _ = ::env_logger::try_init();
+
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
         assert_eq!(localhost.is_loopback(), true);
 
@@ -108,6 +114,8 @@ mod udp_tests {
 
     #[test]
     fn aggresive_udp_add() {
+        let _ = ::env_logger::try_init();
+
         let localhost = std::net::Ipv4Addr::new(127, 0, 0, 1);
         assert_eq!(localhost.is_loopback(), true);
         let server_port = 3500;
